@@ -1,0 +1,63 @@
+/* Editor-specific styles for nutritionist dashboard */
+.editor-container {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 24px;
+}
+
+.editor-tabs {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 24px;
+  border-bottom: 1px solid var(--color-border);
+  overflow-x: auto;
+}
+
+.editor-tab {
+  padding: 10px 20px;
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--color-text-secondary);
+  border: 1px solid transparent;
+  border-bottom: none;
+  border-radius: 8px 8px 0 0;
+  cursor: pointer;
+  transition: all 150ms ease;
+}
+
+.editor-tab.active {
+  color: var(--color-primary);
+  background: var(--color-bg-base);
+  border-color: var(--color-border);
+  border-bottom-color: var(--color-bg-base);
+}
+
+.editor-tab:hover:not(.active) {
+  background: var(--color-bg-subtle);
+  color: var(--color-text-primary);
+}
+
+.editor-panel {
+  background: var(--color-bg-base);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  padding: 20px;
+}
+
+.editor-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 16px;
+}
+
+@media (max-width: 768px) {
+  .editor-container {
+    padding: 12px;
+  }
+
+  .editor-grid {
+    grid-template-columns: 1fr;
+  }
+}

@@ -1,0 +1,23 @@
+.DS_Store
+node_modules/
+*.local
+.vscode/
+.idea/
+
+# Vite cache and temp files
+vite.config.js.timestamp-*
+.vite/
+
+# Build output
+dist/
+
+# Environment variables
+.env
+.env.local
+.env.*.local
+
+# OS files
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
