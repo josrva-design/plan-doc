@@ -1,35 +1,82 @@
 import { useMemo } from 'react';
-import type { AppData, ClientPlan, MealClient, DayRoutine, SupplementClient, WarmupPhase, AvancePeso, AvanceMedida, EstadisticasClient, TratamientoNutricional, TratamientoEntrenamiento, Clinico, GuiaItem, GlosarioItem, FaseId, BloqueTipo, PatientBloque, PatientFase, PatientEjercicio } from './types';
+import { getDayType } from '../utils/dayType.ts';
+import { isConsultaVencida } from '../utils/evolutionHelpers';
+import { groupSeries, ejToDisplay, getCombinedSections } from '../utils/routineHelpers.ts';
+import { normalizeFood, normalizeMeal } from '../utils/normalizeEditorData.ts';
+import { normalizeWarmupForExport as flattenWarmup } from '../utils/normalizeWarmup.ts';
+import { DAY_KEYS, DAY_LABELS } from '../utils/calendarConstants.ts';
+import type { AppData, ClientPlan, MealClient, DayRoutine, SupplementClient, WarmupPhase, AvancePeso, AvanceMedida, EstadisticasClient, TratamientoNutricional, TratamientoEntrenamiento, Clinico, FaseId, BloqueTipo, PatientBloque, PatientFase, PatientEjercicio, WarmupExercise } from './types';
 
-const DAY_MAP = [
-  { key: 'monday', dia: 'LUNES' },
-  { key: 'tuesday', dia: 'MARTES' },
-  { key: 'wednesday', dia: 'MIÉRCOLES' },
-  { key: 'thursday', dia: 'JUEVES' },
-  { key: 'friday', dia: 'VIERNES' },
-  { key: 'saturday', dia: 'SÁBADO' },
-  { key: 'sunday', dia: 'DOMINGO' },
-];
+const DAY_MAP = DAY_KEYS.map((key, i) => ({ key, dia: DAY_LABELS[i] }));
 
-const LOWER_KEYWORDS = ['pierna', 'core', 'inferior', 'leg', 'lower'];
-const UPPER_KEYWORDS = ['pecho', 'espalda', 'hombro', 'trapecio', 'tríceps', 'triceps', 'superior', 'push', 'pull', 'upper'];
-
-const getDayType = (actividad: string): DayRoutine['tipo'] => {
-  const act = (actividad || '').toLowerCase();
-  if (!act || act === 'descanso') return 'rest';
-  if (LOWER_KEYWORDS.some((k) => act.includes(k))) return 'lower';
-  if (UPPER_KEYWORDS.some((k) => act.includes(k))) return 'upper';
-  return 'full';
-};
+function parseFechaConsulta(fechaConsulta: string): Date | null {
+  if (!fechaConsulta) return null;
+  const parts = String(fechaConsulta).split('/');
+  let y: number, m: number, d: number;
+  if (parts.length === 3) {
+    if (parts[2].length === 4) {
+      const dd = parseInt(parts[0], 10);
+      const mm = parseInt(parts[1], 10) - 1;
+      const yy = parseInt(parts[2], 10);
+      y = yy; m = mm; d = dd;
+    } else {
+      const dd = parseInt(parts[0], 10);
+      const mm = parseInt(parts[1], 10) - 1;
+      const yy = parseInt(parts[2], 10);
+      y = yy >= 0 && yy <= 99 ? 2000 + yy : yy;
+      m = mm; d = dd;
+    }
+  } else {
+    const isoParts = String(fechaConsulta).split('-');
+    if (isoParts.length !== 3) return null;
+    y = parseInt(isoParts[0], 10);
+    m = parseInt(isoParts[1], 10) - 1;
+    d = parseInt(isoParts[2], 10);
+  }
+  return new Date(y, m, d);
+}
 
 const formatearPrescripcion = (ex: any): string => {
-  const sets = (ex.serie || ex.sets || '1').toString().trim();
   const reps = (ex.reps || '').toString().trim();
   const descanso = (ex.descanso || ex.pausa || ex.rest || '').toString().trim();
   const rir = (ex.rir || '').toString().trim();
+  const tecnica = (ex.tecnica || '').toString().trim();
+  const s1 = (ex.semana1 || ex.s1 || '').toString().trim();
+  const s2 = (ex.semana2 || ex.s2 || '').toString().trim();
+  const s3 = (ex.semana3 || ex.s3 || '').toString().trim();
+  const s4 = (ex.semana4 || ex.s4 || '').toString().trim();
+  const hasWeeks = s1 || s2 || s3 || s4;
+  const isAprox = (ex.categoria || '').toLowerCase() === 'aprox' || /\(\d+%\)/.test(ex.nombre || '');
+
+  if (isAprox) {
+    if (!reps) return '-';
+    let result = `${reps} reps`;
+    if (descanso) result += ` • ${descanso}`;
+    return result;
+  }
+
+  if (hasWeeks) {
+    const arr = [s1, s2, s3, s4].map(v => parseInt(v, 10) || 0);
+    const todosIguales = arr.every(v => v === arr[0]);
+    let result = '';
+    if (todosIguales) {
+      result = `${arr[0]} sets x 4 semanas`;
+    } else {
+      result = `Sem 1: ${s1} sets • Sem 2: ${s2} sets • Sem 3: ${s3} sets • Sem 4: ${s4} sets`;
+    }
+    if (reps) result += ` • ${reps} reps`;
+    if (descanso) result += ` • ${descanso}`;
+    if (tecnica) result += ` • Técnica: ${tecnica}`;
+    if (rir && rir !== '-') {
+      const prefix = /^RIR\s*/i.test(rir) ? '' : 'RIR ';
+      result += ` • ${prefix}${rir}`;
+    }
+    return result;
+  }
 
   if (!reps) return '-';
 
+  const sets = (ex.serie || ex.sets || '1').toString().trim();
   const isTime = /min|seg|\bs\b$/i.test(reps.toLowerCase()) && !/reps|rep\b/i.test(reps.toLowerCase());
 
   let repsText = reps;
@@ -45,7 +92,11 @@ const formatearPrescripcion = (ex: any): string => {
     result = `${sets} series x ${reps} reps`;
   }
   if (descanso) result += ` • ${descanso}`;
-  if (rir && rir !== '-') result += ` • RIR ${rir}`;
+  if (tecnica) result += ` • Técnica: ${tecnica}`;
+  if (rir && rir !== '-') {
+    const prefix = /^RIR\s*/i.test(rir) ? '' : 'RIR ';
+    result += ` • ${prefix}${rir}`;
+  }
   return result;
 };
 
@@ -75,34 +126,6 @@ const WARMUP_FASE_MAP: Record<string, FaseId> = {
 
 const ABDOMINAL_KEYWORDS = ['abdo', 'core', 'plancha', 'crunch', 'mountain climber', 'elevación', 'levan'];
 
-const flattenWarmup = (warmup: any): WarmupPhase[] => {
-  if (!warmup) return [];
-  const phases: WarmupPhase[] = [];
-  const lista = Array.isArray(warmup) ? warmup : (warmup.general || warmup.lower || warmup.upper || []);
-  if (lista.length) phases.push({ fase: 'GENERAL', opciones: [], individuales: [] });
-  if (!Array.isArray(warmup)) {
-    if (warmup.movilidad?.length) phases.push({ fase: 'MOVILIDAD', opciones: [], individuales: [] });
-    if (warmup.específico?.length) phases.push({ fase: 'ESPECÍFICO', opciones: [], individuales: [] });
-  }
-  return phases.map((phase) => {
-    const source = Array.isArray(warmup) ? lista : (warmup[phase.fase.toLowerCase()] || []);
-    const formatDetalle = (e: any) => {
-      const parts = [e.sets, e.reps, e.pausa || e.descanso].filter(Boolean);
-      if (!parts.length) return '—';
-      return parts.join(' × ');
-    };
-    const toOp = (e: any) => ({
-      ejercicio: e.ejercicio || e.nombre || '',
-      detalle: formatDetalle(e),
-      tipo: e.tipo || '',
-      grupo: e.grupo || '',
-    });
-    const opciones = source.slice(0, 3).map(toOp);
-    const individuales = source.slice(3).map(toOp);
-    return { fase: phase.fase, opciones, individuales };
-  });
-};
-
 const buildWarmupFases = (phases: WarmupPhase[], grupo: 'lower' | 'upper'): PatientFase[] => {
   const fases: PatientFase[] = [];
   let counter = 0;
@@ -115,56 +138,92 @@ const buildWarmupFases = (phases: WarmupPhase[], grupo: 'lower' | 'upper'): Pati
     const allEj = (fase.opciones || []).concat(fase.individuales || []);
     if (!allEj.length) return;
 
-    const isGeneral = fase.fase === 'GENERAL';
+    const hasBlockLetters = allEj.some((ex) => ex.blockLetter);
 
-    const groups: Record<string, any[]> = {};
-    const groupOrder: string[] = [];
-    allEj.forEach((ex) => {
-      const g = ex.grupo || 'default';
-      if (!groups[g]) {
-        groups[g] = [];
-        groupOrder.push(g);
-      }
-      groups[g].push(ex);
-    });
+    let bloques: PatientBloque[] = [];
 
-    const bloques: PatientBloque[] = groupOrder.map((g, idx) => {
-      const exGroup = groups[g];
-      const count = exGroup.length;
-      const exTipo = exGroup[0]?.tipo || '';
+    if (hasBlockLetters) {
+      const groups: Record<string, any[]> = {};
+      const order: string[] = [];
 
-      let tipo: BloqueTipo;
-      let indicacion = '';
+      allEj.forEach((ex) => {
+        const letter = ex.blockLetter || nextLetra();
+        if (!groups[letter]) {
+          groups[letter] = [];
+          order.push(letter);
+        }
+        groups[letter].push(ex);
+      });
 
-      if (idx === 0 && isGeneral && count > 1) {
-        tipo = 'ELIGE 1 OPCIÓN';
-        indicacion = 'Elige 1 opción';
-      } else if (exTipo === 'Biserie' && count === 2) {
-        tipo = 'BISERIE';
-        indicacion = '2 ejercicios en biserie';
-      } else if (exTipo === 'Circuito' && count > 1) {
-        tipo = 'SERIE SIMPLE';
-        indicacion = `Circuito • ${count} ejercicios`;
-      } else {
-        tipo = 'SERIE SIMPLE';
-      }
+      bloques = order.map((letter) => {
+        const exGroup = groups[letter];
+        exGroup.sort((a, b) => (a.blockPosition || 0) - (b.blockPosition || 0));
 
+        const rawSerie = exGroup[0]?.blockSerie || exGroup[0]?.tipo || 'Simple';
+        const isBlockType = ['Simple', 'Biserie', 'Triserie', 'Circuito', 'Cardio'].includes(rawSerie);
+        let tipo: BloqueTipo = 'SERIE SIMPLE';
+        if (rawSerie === 'Biserie') tipo = 'BISERIE';
+        else if (rawSerie === 'Triserie') tipo = 'TRISERIE';
+        else if (rawSerie === 'Circuito') tipo = 'SERIE GIGANTE / CIRCUITO';
+        else if (!isBlockType && exGroup.length === 2) tipo = 'BISERIE';
+        else if (!isBlockType && exGroup.length === 3) tipo = 'TRISERIE';
+
+        const ejercicios: PatientEjercicio[] = exGroup.map((ex, eIdx) => ({
+          codigo: `${letter}${eIdx + 1}`,
+          nombre: ex.ejercicio || '—',
+          badgeTecnica: '',
+          prescripcion: ex.detalle || '—',
+          grupo: ex.grupo || 'default',
+          subtipo: ex.tipo || 'Normal',
+          series: (ex.sets || ex.serie || '1').toString().trim(),
+          reps: ex.reps || '',
+          pausa: ex.pausa || ex.descanso || '',
+          descanso: ex.pausa || ex.descanso || '',
+          semana1: ex.semana1 || '',
+          semana2: ex.semana2 || '',
+          semana3: ex.semana3 || '',
+          semana4: ex.semana4 || '',
+          musculo: ex.musculo || '',
+          movimiento: ex.movimiento || '',
+        }));
+
+        return {
+          letra: letter,
+          tipo,
+          indicacion: '',
+          ejercicios,
+        };
+      });
+    } else {
       const bloqueLetra = nextLetra();
-
-      const ejercicios: PatientEjercicio[] = exGroup.map((ex, eIdx) => ({
-        codigo: isGeneral ? `${bloqueLetra}${eIdx + 1}` : '',
+      const ejercicios: PatientEjercicio[] = allEj.map((ex, eIdx) => ({
+        codigo: `${bloqueLetra}${eIdx + 1}`,
         nombre: ex.ejercicio || '—',
-        badgeTecnica: isGeneral ? '' : exTipo === 'Biserie' ? 'BISERIE' : exTipo === 'Circuito' ? 'CIRCUITO' : '',
+        badgeTecnica: '',
         prescripcion: ex.detalle || '—',
+        grupo: ex.grupo || 'default',
+        subtipo: ex.tipo || 'Normal',
+        series: (ex.sets || ex.serie || '1').toString().trim(),
+        reps: ex.reps || '',
+        pausa: ex.pausa || ex.descanso || '',
+        descanso: ex.pausa || ex.descanso || '',
+        semana1: ex.semana1 || '',
+        semana2: ex.semana2 || '',
+        semana3: ex.semana3 || '',
+        semana4: ex.semana4 || '',
+        musculo: ex.musculo || '',
+        movimiento: ex.movimiento || '',
       }));
 
-      return {
-        letra: bloqueLetra,
-        tipo,
-        indicacion,
-        ejercicios,
-      };
-    });
+      bloques = [
+        {
+          letra: bloqueLetra,
+          tipo: 'SERIE SIMPLE',
+          indicacion: '',
+          ejercicios,
+        },
+      ];
+    }
 
     fases.push({
       id: faseId,
@@ -180,8 +239,7 @@ const buildWarmupFases = (phases: WarmupPhase[], grupo: 'lower' | 'upper'): Pati
 
 const organizarEnFases = (
   routine: any,
-  warmupLower: WarmupPhase[],
-  warmupUpper: WarmupPhase[],
+  warmup: WarmupExercise[],
   tipo: DayRoutine['tipo']
 ): PatientFase[] => {
   const fases: PatientFase[] = [];
@@ -189,31 +247,75 @@ const organizarEnFases = (
   let trainingBloqueCounter = 0;
   const nextTrainingLetra = () => String.fromCharCode(65 + trainingBloqueCounter++);
 
-  fases.push(...buildWarmupFases(warmupLower, 'lower'));
-  fases.push(...buildWarmupFases(warmupUpper, 'upper'));
+  const lowerExercises = (warmup || []).filter((e) => e.grupo === 'lower');
+  const upperExercises = (warmup || []).filter((e) => e.grupo === 'upper');
+
+  if (tipo === 'lower' || tipo === 'full') {
+    fases.push(...buildWarmupFases(flattenWarmup(lowerExercises), 'lower'));
+  }
+  if (tipo === 'upper' || tipo === 'full') {
+    fases.push(...buildWarmupFases(flattenWarmup(upperExercises), 'upper'));
+  }
 
   // SA fase (aproximación / warm-up sets) from routine ejercicios
-  const aproxRaw = (routine?.ejercicios || []).filter((ej: any) => (ej.categoria || '') === 'Aprox' && ej.aproxBase);
-  if (aproxRaw.length > 0) {
-    const baseMap: Record<string, any[]> = {};
-    aproxRaw.forEach((ej: any) => {
-      const base = ej.aproxBase;
-      if (!baseMap[base]) baseMap[base] = [];
-      baseMap[base].push(ej);
+  const todosEjercicios = (routine?.ejercicios || []).map((ej: any) => ejToDisplay(ej));
+  const ejerciciosConBloques = getCombinedSections(todosEjercicios);
+  const aproxEjercicios = ejerciciosConBloques.filter((ej: any) => ej.isAprox);
+  const efectivosEjercicios = ejerciciosConBloques.filter((ej: any) => !ej.isAprox);
+  const nombreBase = (nombre) => (nombre || '').replace(/\s*\(\d+%\)\s*/, '').trim();
+
+  if (aproxEjercicios.length > 0) {
+    const aproxGroups: Record<string, any[]> = {};
+    aproxEjercicios.forEach((ej: any) => {
+      const base = nombreBase(ej.ejercicio);
+      if (!aproxGroups[base]) aproxGroups[base] = [];
+      aproxGroups[base].push(ej);
     });
 
-    const aproxBloques: PatientBloque[] = Object.entries(baseMap).map(([baseId, exGroup], idx) => {
-      const baseEx = (routine?.ejercicios || []).find((ej: any) => ej.uid === baseId || ej.id === baseId);
-      const nombreBase = baseEx?.ejercicio || 'Ejercicio';
+    const aproxBloques: PatientBloque[] = Object.entries(aproxGroups).map(([baseName, exGroup]) => {
+      const sorted = exGroup.sort((a, b) => (parseInt(a.blockPosition) || 0) - (parseInt(b.blockPosition) || 0));
+      const nextEffective = efectivosEjercicios.find((ej: any) => nombreBase(ej.ejercicio) === baseName);
+      const rawSerie = nextEffective?.blockSerie || nextEffective?.serie || 'Simple';
+      const isBlockType = ['Simple', 'Biserie', 'Triserie', 'Circuito', 'Cardio'].includes(rawSerie);
+      let tipo: BloqueTipo = 'SERIE SIMPLE';
+      if (rawSerie === 'Biserie') tipo = 'BISERIE';
+      else if (rawSerie === 'Triserie') tipo = 'TRISERIE';
+      else if (rawSerie === 'Circuito') tipo = 'SERIE GIGANTE / CIRCUITO';
+      else if (!isBlockType && sorted.length === 2) tipo = 'BISERIE';
+      else if (!isBlockType && sorted.length === 3) tipo = 'TRISERIE';
+
       return {
-        letra: nextTrainingLetra(),
-        tipo: 'SERIE SIMPLE' as BloqueTipo,
-        indicacion: `${exGroup.length} series de aproximación • ${nombreBase}`,
-        ejercicios: exGroup.map((ex: any) => ({
-          codigo: '',
+        letra: sorted[0]?.blockLetter || 'A',
+        tipo,
+        indicacion: `${sorted.length} series de aproximación`,
+        ejercicios: sorted.map((ex: any) => ({
+          codigo: ex.secuencia || `${sorted[0]?.blockLetter || 'A'}${ex.blockPosition}`,
           nombre: ex.ejercicio || '—',
-          badgeTecnica: ex.tecnica || `${ex.aproxPorcentaje || 50}%`,
+          badgeTecnica: ex.tecnica ? ex.tecnica : `${ex.aproxPorcentaje || 50}% peso`,
           prescripcion: formatearPrescripcion(ex),
+          subtipo: ex.tipo || 'Normal',
+          categoria: 'Aprox',
+          faseId: 'SA',
+          series: (ex.sets || ex.serie || '1').toString().trim(),
+          semana1: ex.semana1 || '',
+          semana2: ex.semana2 || '',
+          semana3: ex.semana3 || '',
+          semana4: ex.semana4 || '',
+          s1: ex.s1 || ex.semana1 || '',
+          s2: ex.s2 || ex.semana2 || '',
+          s3: ex.s3 || ex.semana3 || '',
+          s4: ex.s4 || ex.semana4 || '',
+          tecnica: ex.tecnica || '',
+          rir: ex.rir || '',
+          descanso: ex.descanso || ex.pausa || '',
+          musculo: ex.musculo || '',
+          movimiento: ex.movimiento || '',
+          peso: ex.peso || '',
+          video: ex.video || '',
+          notas: ex.notas || '',
+          reps: ex.reps || '',
+          aproxPorcentaje: ex.aproxPorcentaje || null,
+          porcentaje: ex.aproxPorcentaje || null,
         })),
       };
     });
@@ -228,20 +330,22 @@ const organizarEnFases = (
   }
 
   // Main exercises → PRINCIPAL and ABD fases
-  const ejerciciosRaw = (routine?.ejercicios || []).filter((ej: any) => {
+  const abdominalExs = efectivosEjercicios.filter((ej: any) => {
     const nombre = (ej.ejercicio || '').toLowerCase();
-    const isAbdominal = ABDOMINAL_KEYWORDS.some((kw) => nombre.includes(kw));
-    const isAprox = (ej.categoria || '') === 'Aprox';
-    return !isAbdominal && !isAprox;
+    return ABDOMINAL_KEYWORDS.some((kw) => nombre.includes(kw));
   });
 
-  if (ejerciciosRaw.length > 0) {
-    // Group by secuencia letter
+  const mainEjercicios = efectivosEjercicios.filter((ej: any) => {
+    const nombre = (ej.ejercicio || '').toLowerCase();
+    return !ABDOMINAL_KEYWORDS.some((kw) => nombre.includes(kw));
+  });
+
+  if (mainEjercicios.length > 0) {
     const groups: Record<string, any[]> = {};
     const order: string[] = [];
-    ejerciciosRaw.forEach((ej) => {
-      const match = (ej.secuencia || '').match(/^([A-Z])/);
-      const letter = match ? match[1] : 'Z';
+
+    mainEjercicios.forEach((ej) => {
+      const letter = ej.blockLetter || 'A';
       if (!groups[letter]) {
         groups[letter] = [];
         order.push(letter);
@@ -249,12 +353,26 @@ const organizarEnFases = (
       groups[letter].push(ej);
     });
 
-    const bloques: PatientBloque[] = order.map((letter, idx) => {
+    Object.keys(groups).forEach((letter) => {
+      groups[letter].sort((a, b) => {
+        const posA = parseInt(a.blockPosition) || 0;
+        const posB = parseInt(b.blockPosition) || 0;
+        if (posA && posB) return posA - posB;
+        return 0;
+      });
+    });
+
+    const bloques: PatientBloque[] = order.map((letter) => {
       const exGroup = groups[letter];
       const count = exGroup.length;
+      const rawSerie = exGroup[0]?.blockSerie || exGroup[0]?.serie || '';
+      const isBlockType = ['Simple', 'Biserie', 'Triserie', 'Circuito', 'Cardio'].includes(rawSerie);
       let tipo: BloqueTipo = 'SERIE SIMPLE';
-      if (count === 2) tipo = 'BISERIE';
-      else if (count === 3) tipo = 'TRISERIE';
+      if (rawSerie === 'Biserie') tipo = 'BISERIE';
+      else if (rawSerie === 'Triserie') tipo = 'TRISERIE';
+      else if (rawSerie === 'Circuito') tipo = 'SERIE GIGANTE / CIRCUITO';
+      else if (!isBlockType && count === 2) tipo = 'BISERIE';
+      else if (!isBlockType && count === 3) tipo = 'TRISERIE';
 
       let indicacion = '';
       if (tipo === 'BISERIE' || tipo === 'TRISERIE') {
@@ -262,16 +380,37 @@ const organizarEnFases = (
         const reps = exGroup[0]?.reps || '—';
         const descanso = exGroup[0]?.descanso || exGroup[0]?.pausa || '—';
         indicacion = `${rondas} rondas x ${reps} reps c/u • ${descanso} entre rondas`;
+      } else if (tipo === 'SERIE GIGANTE / CIRCUITO') {
+        const descanso = exGroup[0]?.descanso || exGroup[0]?.pausa || '—';
+        indicacion = `Circuito • ${descanso} entre estaciones`;
       }
 
-      const ejercicios: PatientEjercicio[] = exGroup.map((ex) => ({
-        codigo: ex.secuencia || '',
+      const ejercicios: PatientEjercicio[] = exGroup.map((ex, idx) => ({
+        codigo: ex.secuencia || `${letter}${idx + 1}`,
         nombre: ex.ejercicio || '—',
         badgeTecnica: ex.tecnica || '',
         prescripcion: formatearPrescripcion(ex),
+        subtipo: ex.tipo || 'Normal',
+        series: (ex.sets || ex.serie || '1').toString().trim(),
+        semana1: ex.semana1 || '',
+        semana2: ex.semana2 || '',
+        semana3: ex.semana3 || '',
+        semana4: ex.semana4 || '',
+        s1: ex.s1 || ex.semana1 || '',
+        s2: ex.s2 || ex.semana2 || '',
+        s3: ex.s3 || ex.semana3 || '',
+        s4: ex.s4 || ex.semana4 || '',
+        tecnica: ex.tecnica || '',
+        rir: ex.rir || '',
+        descanso: ex.descanso || ex.pausa || '',
+        musculo: ex.musculo || '',
+        movimiento: ex.movimiento || '',
+        peso: ex.peso || '',
+        video: ex.video || '',
+        notas: ex.notas || '',
       }));
 
-      return { letra: nextTrainingLetra(), tipo, indicacion, ejercicios };
+      return { letra: letter, tipo, indicacion, ejercicios };
     });
 
     fases.push({
@@ -279,36 +418,74 @@ const organizarEnFases = (
       nombre: FASE_LABELS['PRINCIPAL'],
       badgeColor: FASE_COLORS['PRINCIPAL'],
       bloques,
-    grupo: 'main',
+      grupo: 'main',
     });
   }
 
   // ABD fase (abdominal exercises)
-  const abdominalExs = (routine?.ejercicios || []).filter((ej: any) => {
-    const nombre = (ej.ejercicio || '').toLowerCase();
-    return ABDOMINAL_KEYWORDS.some((kw) => nombre.includes(kw));
-  });
-
   if (abdominalExs.length > 0) {
     const abGroups: Record<string, any[]> = {};
+    const abOrder: string[] = [];
     abdominalExs.forEach((ej: any) => {
-      const match = (ej.secuencia || '').match(/^([A-Z])/);
-      const letter = match ? match[1] : 'A';
-      if (!abGroups[letter]) abGroups[letter] = [];
+      const blockLetter = (ej.blockLetter || '').trim();
+      const seqLetter = (ej.secuencia || '').match(/^([A-Z])/)?.[1];
+      const letter = blockLetter || seqLetter || 'A';
+      if (!abGroups[letter]) {
+        abGroups[letter] = [];
+        abOrder.push(letter);
+      }
       abGroups[letter].push(ej);
     });
 
-    const bloques: PatientBloque[] = Object.entries(abGroups).map(([letter], idx) => {
+    Object.keys(abGroups).forEach((letter) => {
+      abGroups[letter].sort((a, b) => {
+        const posA = parseInt(a.blockPosition) || 0;
+        const posB = parseInt(b.blockPosition) || 0;
+        if (posA && posB) return posA - posB;
+        return 0;
+      });
+    });
+
+    const bloques: PatientBloque[] = abOrder.map((letter) => {
       const exGroup = abGroups[letter];
-      const ejercicios: PatientEjercicio[] = exGroup.map((ex) => ({
-        codigo: ex.secuencia || '',
+      const count = exGroup.length;
+      const rawSerie = exGroup[0]?.blockSerie || exGroup[0]?.serie || '';
+      const isBlockType = ['Simple', 'Biserie', 'Triserie', 'Circuito', 'Cardio'].includes(rawSerie);
+      let tipo: BloqueTipo = 'SERIE SIMPLE';
+      if (rawSerie === 'Biserie') tipo = 'BISERIE';
+      else if (rawSerie === 'Triserie') tipo = 'TRISERIE';
+      else if (rawSerie === 'Circuito') tipo = 'SERIE GIGANTE / CIRCUITO';
+      else if (!isBlockType && count === 2) tipo = 'BISERIE';
+      else if (!isBlockType && count === 3) tipo = 'TRISERIE';
+
+      const ejercicios: PatientEjercicio[] = exGroup.map((ex, idx) => ({
+        codigo: ex.secuencia || `${letter}${idx + 1}`,
         nombre: ex.ejercicio || '—',
         badgeTecnica: ex.tecnica || '',
         prescripcion: formatearPrescripcion(ex),
+        subtipo: ex.tipo || 'Normal',
+        series: (ex.sets || ex.serie || '1').toString().trim(),
+        semana1: ex.semana1 || '',
+        semana2: ex.semana2 || '',
+        semana3: ex.semana3 || '',
+        semana4: ex.semana4 || '',
+        s1: ex.s1 || ex.semana1 || '',
+        s2: ex.s2 || ex.semana2 || '',
+        s3: ex.s3 || ex.semana3 || '',
+        s4: ex.s4 || ex.semana4 || '',
+        tecnica: ex.tecnica || '',
+        rir: ex.rir || '',
+        descanso: ex.descanso || ex.pausa || '',
+        musculo: ex.musculo || '',
+        movimiento: ex.movimiento || '',
+        peso: ex.peso || '',
+        video: ex.video || '',
+        notas: ex.notas || '',
+        reps: ex.reps || '',
       }));
       return {
-        letra: nextTrainingLetra(),
-        tipo: 'SERIE SIMPLE' as BloqueTipo,
+        letra: letter,
+        tipo: tipo,
         indicacion: '',
         ejercicios,
       };
@@ -319,21 +496,13 @@ const organizarEnFases = (
       nombre: FASE_LABELS['ABD'],
       badgeColor: FASE_COLORS['ABD'],
       bloques,
-    grupo: 'main',
+      grupo: 'main',
     });
   }
 
   return fases;
 };
 
-const guia: GuiaItem[] = [
-  { titulo: '¿Cómo usar tu plan mensual?', contenido: 'Tu plan es una semana que se repite 4 veces. Cada día tiene su entrenamiento y nutrición. Si abres el link un miércoles, verás el miércoles. Puedes navegar entre días con las pills LUN-DOM.' },
-  { titulo: '¿Qué es RIR?', contenido: 'RIR = Repeticiones en Reserva. RIR 2 significa que terminas la serie dejando 2 repeticiones más en el tanque, no al fallo. Más seguro y progresivo.' },
-  { titulo: '¿Cómo progresar?', contenido: 'Si completas todas las series con RIR 2, sube 2.5kg la próxima semana. Si no, mantén peso. Registra todo.' },
-  { titulo: 'Calentamiento', contenido: 'Nunca te lo saltes. Hay solo 2: LOWER (días de pierna) y UPPER (días de tren superior). Están abajo en desplegables.' },
-];
-
-const glosario: GlosarioItem[] = [];
 
 const parseMacro = (val: any): string => {
   if (!val) return '-';
@@ -375,8 +544,7 @@ export default function usePatientData(editorData: AppData): ClientPlan {
     const {
       person,
       calendar = [],
-      warmupUpper,
-      warmupLower,
+      warmup,
       routines = [],
       meals = [],
       supplements = [],
@@ -386,48 +554,77 @@ export default function usePatientData(editorData: AppData): ClientPlan {
       feedback = {},
       diagnosis = {},
       objectives = {},
-      guide: editorGuide = [],
-      glossary: editorGlossary = [],
+      habits,
       evolution,
       fechaConsulta,
+      proximaConsulta,
+      supplementsStrategy,
     } = editorData || {};
 
     const routinesByDay: Record<string, DayRoutine> = {};
-    const supplementsByDay: Record<string, SupplementClient[]> = {};
+    const mappedSupps: SupplementClient[] = [];
+    const calendarList = Array.isArray(calendar) ? calendar : [];
 
-    DAY_MAP.forEach(({ key, dia }) => {
-      const calDay = calendar.find((c) => c.dia === dia);
-      const actividad = calDay?.actividad || '';
-      const tipo = getDayType(actividad);
-
-      const routine = calDay?.routineId
-        ? routines.find((r) => r.id === calDay.routineId)
-        : null;
-
-       const warmupLowerFases: WarmupPhase[] = warmupLower ? flattenWarmup(warmupLower) : [];
-       const warmupUpperFases: WarmupPhase[] = warmupUpper ? flattenWarmup(warmupUpper) : [];
+    if (!calendarList.length) {
+      DAY_MAP.forEach(({ key, dia }) => {
+        routinesByDay[key] = {
+          tipo: 'rest',
+          actividad: '',
+          titulo: 'Sin actividad',
+          subtitulo: 'Descanso',
+          fases: [],
+        } as DayRoutine;
+      });
+    } else {
+      DAY_MAP.forEach(({ key, dia }, idx) => {
+        let calDay = calendarList.find((c) => c && typeof c === 'object' && c.dia === dia);
+        if (!calDay && calendarList[idx]) {
+          calDay = { ...calendarList[idx], dia, dayKey: key };
+        }
+        const actividad = calDay?.actividad || '';
+        const tipo = getDayType(actividad);
+        let routine = null;
+        if (calDay?.routineId) {
+          routine = (routines || []).find((r) => r.id === calDay?.routineId);
+        }
+        if (!routine && (calDay?.actividad || '').trim()) {
+          const actividad = (calDay?.actividad || '').trim();
+          routine = (routines || []).find((r) => (r.nombre || '').trim() === actividad);
+        }
+        if (!routine && (calDay?.actividad || '').trim().toLowerCase() !== 'descanso') {
+          const actividad = (calDay?.actividad || '').trim().toLowerCase();
+          routine = (routines || []).find((r) => (r.nombre || '').trim().toLowerCase() === actividad);
+        }
 
         const subtipo = tipo === 'lower' ? 'Lower Body' : tipo === 'upper' ? 'Upper Body' : tipo === 'full' ? 'Full Body' : 'Descanso';
 
-       routinesByDay[key] = {
-         tipo,
-         actividad,
-         titulo: routine?.label || actividad || 'Sin rutina',
-         subtitulo: subtipo,
-         fases: organizarEnFases(
-           routine,
-            (tipo === 'lower' || tipo === 'full') ? warmupLowerFases : [],
-            (tipo === 'upper' || tipo === 'full') ? warmupUpperFases : [],
-           tipo
-         ),
-       } as DayRoutine;
+        routinesByDay[key] = {
+           tipo,
+           actividad: actividad || 'Sin actividad',
+           titulo: routine?.nombre || routine?.label || actividad || 'Sin rutina',
+          subtitulo: subtipo,
+          fases: organizarEnFases(
+            routine || null,
+            warmup || [],
+            tipo
+          ),
+        } as DayRoutine;
+      });
+    }
 
-      supplementsByDay[key] = (supplements || []).map((s) => ({
-        nombre: s.nombre || s.suplemento || 'Suplemento',
-        dosis: s.dosis || '',
-        hora: s.horario || s.hora || '',
-      }));
-    });
+    const mappedSupplements: SupplementClient[] = (supplements || []).map((s) => ({
+      nombre: s.nombre || s.suplemento || 'Suplemento',
+      dosis: s.gramos || s.dosis || '',
+      hora: s.horario || s.hora || '',
+      tiempo: s.tiempo || '',
+      frecuencia: s.frecuencia || '',
+      tomarCon: s.tomarCon || '',
+      notas: s.notas || '',
+      gramos: s.gramos || '',
+      porcion: s.porcion || '',
+      cantidad: s.cantidad || '',
+      marca: s.marca || '',
+    }));
 
     const evolutionCells = evolution?.cells || {};
     const evolutionConsultas = evolution?.consultas || [];
@@ -440,7 +637,7 @@ export default function usePatientData(editorData: AppData): ClientPlan {
         break;
       }
     }
-    const pesoAnterior = person?.pesoIni || '-';
+    const pesoAnterior = getEvolutionPrevious(evolutionCells, evolutionConsultas, 'peso') ?? parseStatNumber(person?.pesoIni) ?? 0;
     const pesoDelta = (pesoActual !== '-' && pesoAnterior !== '-') ? parseFloat(String(pesoActual)) - parseFloat(String(pesoAnterior)) : 0;
 
     const abdomenActual = getEvolutionValue(evolutionCells, evolutionConsultas, 'abdomen') ?? parseStatNumber(stats?.abdomen) ?? 0;
@@ -472,7 +669,7 @@ export default function usePatientData(editorData: AppData): ClientPlan {
       nutricion: Number(stats?.nutricion) || 0,
       entrenamiento: Number(stats?.entreno) || 0,
       cardio: Number(stats?.cardio) || 0,
-      descanso: String(stats?.descanso || '0h'),
+      descanso: Number(stats?.descanso) || 0,
     };
 
     const tratamientoNutricional: TratamientoNutricional = {
@@ -488,6 +685,8 @@ export default function usePatientData(editorData: AppData): ClientPlan {
       dias: String(training.dias || '-'),
       cardio: String(training.cardio || '-'),
       pasos: String(person?.pasos || '-'),
+      rir: String(training.rir || ''),
+      indic: String(training.indic || ''),
     };
 
     const clinico: Clinico = {
@@ -496,53 +695,52 @@ export default function usePatientData(editorData: AppData): ClientPlan {
       objetivos: [objectives.o1, objectives.o2, objectives.o3].filter(Boolean).length ? [objectives.o1, objectives.o2, objectives.o3].filter(Boolean) : ['Sin datos'],
     };
 
-    const proximaConsulta = (() => {
-      if (!fechaConsulta) return null;
-      const parts = String(fechaConsulta).split('/');
-      let y: number, m: number, d: number;
-      if (parts.length === 3) {
-        if (parts[2].length === 4) {
-          const dd = parseInt(parts[0], 10);
-          const mm = parseInt(parts[1], 10) - 1;
-          const yy = parseInt(parts[2], 10);
-          y = yy; m = mm; d = dd;
-        } else {
-          const dd = parseInt(parts[0], 10);
-          const mm = parseInt(parts[1], 10) - 1;
-          const yy = parseInt(parts[2], 10);
-          y = yy >= 0 && yy <= 99 ? 2000 + yy : yy;
-          m = mm; d = dd;
-        }
-      } else {
-        const isoParts = String(fechaConsulta).split('-');
-        if (isoParts.length !== 3) return null;
-        y = parseInt(isoParts[0], 10);
-        m = parseInt(isoParts[1], 10) - 1;
-        d = parseInt(isoParts[2], 10);
+    const proximaConsultaFormatted = (() => {
+      if (proximaConsulta) {
+        const date = parseFechaConsulta(proximaConsulta);
+        if (date) return date.toLocaleDateString('es-MX', { day: 'numeric', month: 'long', year: 'numeric' });
       }
-      const date = new Date(y, m, d);
-      date.setMonth(date.getMonth() + 1);
-      return date.toLocaleDateString('es-ES', { day: 'numeric', month: 'long', year: 'numeric' });
+      const date = parseFechaConsulta(fechaConsulta);
+      if (!date) return null;
+      const next = new Date(date);
+      next.setDate(next.getDate() + 28);
+      return next.toLocaleDateString('es-MX', { day: 'numeric', month: 'long', year: 'numeric' });
     })();
+
+    const proximaConsultaVencida = isConsultaVencida(fechaConsulta);
+
+    const mappedMeals: MealClient[] = (meals || []).map((meal) => normalizeMeal(meal));
 
     return {
       person: {
         nombre: person?.nombre || 'Paciente',
         objetivo: person?.objetivo || '',
         pasos: person?.pasos,
+        edad: person?.edad,
+        sexo: person?.sexo,
       },
-      meals: meals as MealClient[],
+      calendar: (calendar || []).map((c, idx) => {
+        const diaUpper = String(c?.dia || '').trim().toUpperCase();
+        const dayKeyMap = {
+          LUNES: 'monday', MARTES: 'tuesday', MIERCOLES: 'wednesday', MIÉRCOLES: 'wednesday',
+          JUEVES: 'thursday', VIERNES: 'friday', SABADO: 'saturday', SÁBADO: 'saturday', DOMINGO: 'sunday'
+        };
+        const mapEntry = DAY_MAP[idx];
+        const dayKey = c?.dayKey || dayKeyMap[diaUpper] || (diaUpper ? diaUpper.toLowerCase() : '') || mapEntry?.key || '';
+        const dia = c?.dia || mapEntry?.dia || '';
+        return {
+          dia,
+          dayKey,
+          actividad: c?.actividad || '',
+          routineId: c?.routineId || null,
+          cardio: c?.cardio || '',
+          fc: c?.fc || '',
+          pasos: c?.pasos || '',
+        };
+      }),
+      meals: mappedMeals,
       routines: routinesByDay,
-      supplements: supplementsByDay,
-      guia: editorGuide,
-      glosario: editorGlossary.map((g: any) => ({
-        term: g.title,
-        def: (g.body || '').split('\n')[0],
-        cat: g.cat,
-        subtitle: g.subtitle,
-        body: g.body,
-        example: g.example,
-      })),
+      supplements: mappedSupplements,
       stats: {
         adherencia: Number(stats?.adherencia) || 0,
       },
@@ -551,10 +749,25 @@ export default function usePatientData(editorData: AppData): ClientPlan {
       tratamientoNutricional,
       tratamientoEntrenamiento,
       clinico,
-      proximaConsulta,
-      warmupUpper: buildWarmupFases(flattenWarmup(warmupUpper), 'upper'),
-      warmupLower: buildWarmupFases(flattenWarmup(warmupLower), 'lower'),
+      proximaConsulta: proximaConsultaFormatted,
+      proximaConsultaVencida,
+      warmupUpper: buildWarmupFases(flattenWarmup((warmup || []).filter((e) => e.grupo === 'upper')), 'upper'),
+      warmupLower: buildWarmupFases(flattenWarmup((warmup || []).filter((e) => e.grupo === 'lower')), 'lower'),
+      warmupGeneral: buildWarmupFases(flattenWarmup((warmup || []).filter((e) => e.grupo === 'general')), 'general'),
       fechaConsulta: String(fechaConsulta || ''),
+      habits: (() => {
+        if (habits && typeof habits === 'object' && !Array.isArray(habits) && Object.keys(habits).length > 0) return habits as Record<string, string>;
+        const p = person || {};
+        const out: Record<string, string> = {};
+        const map = [
+          ['tabaquismo', 'tabaco'], ['alcohol', 'alcohol'], ['cafe', 'cafe'],
+          ['bebidasAzucaradas', 'azucar'], ['drogasMed', 'drogas'], ['anabolicos', 'ana'],
+          ['preEntreno', 'pre'], ['energeticas', 'energ']
+        ];
+        map.forEach(([hKey, pKey]) => { if (p[pKey]) out[hKey] = p[pKey]; });
+        return out;
+      })(),
+      supplementsStrategy: String(supplementsStrategy || ''),
     };
   }, [editorData]);
 }

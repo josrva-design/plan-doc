@@ -1,0 +1,278 @@
+/* 
+  DOCFITNESS - DESIGN SYSTEM OFICIAL  
+  Sistema Visual Base - Guía V1
+  Proporción: 60% #0066CC / 25% #0D2640 / 10% #2E9E70 / 5% #E8E8E8
+  Tipografía: Inter Tight / Inter
+*/
+
+:root {
+  --blue: #0066CC;
+  --deep: #0D2640;
+  --green: #2E9E70;
+  --gray: #E8E8E8;
+  --light: #F8F9FA;
+  --white: #FFFFFF;
+  --hover: #FAFBFD;
+  --amber: #F59E0B;
+  --red: #EF4444;
+  --purple: #8B5CF6;
+  --gray-medium: #6b7280;
+  --bg: #F6F6F5;
+  --surface: #FFFFFF;
+  --emerald-500: #10B981;
+  --emerald-light: #D1FAE5;
+  --emerald-dark: #065F46;
+  --amber-light: #FEF3C7;
+  --amber-dark: #92400E;
+
+  --font-title: 'Inter Tight', sans-serif;
+  --font-body: 'Inter', sans-serif;
+  --radius-card: 20px;
+  --radius-pill: 9999px;
+  --border: 1px solid var(--gray);
+}
+
+body {
+  font-family: var(--font-body);
+  background: var(--white);
+  color: var(--deep);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* =====================
+   TIPOGRAFÍA
+   ===================== */
+.h1 {
+  font-family: var(--font-title);
+  font-weight: 700;
+  font-size: 36px;
+  line-height: 0.95;
+  letter-spacing: -0.02em;
+  color: var(--deep);
+}
+
+.p {
+  font-family: var(--font-body);
+  font-weight: 400;
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--deep);
+}
+
+/* =====================
+   PILLS - DÍAS Y ETIQUETAS
+   SALUD, RENDIMIENTO, COACHING
+   ===================== */
+
+/* =====================
+   1. RESUMEN
+   ===================== */
+
+/* =====================
+   2. PERFIL CLÍNICO
+   ===================== */
+
+/* =====================
+   3. CALENDARIO SEMANAL
+   ===================== */
+.grid-calendario {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: 1fr;
+  gap: 1px;
+  background: var(--color-bg-subtle);
+  grid-template-rows: 1fr;
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+/* =====================
+   4. RUTINA / PLAN ENTRENAMIENTO
+   ===================== */
+
+/* =====================
+   5. PLAN NUTRICIONAL
+   ===================== */
+
+.meal-time {
+  font-family: var(--font-title);
+  font-weight: 700;
+  font-size: 18px;
+  color: var(--deep);
+}
+
+/* =====================
+   6. GUÍA / GLOSARIO
+   ===================== */
+
+/* =====================
+   7. FAQS
+   ===================== */
+
+/* =====================
+   MISC
+   ===================== */
+
+/* =====================
+   LAYOUT / GRID / FLEX
+   ===================== */
+.grid { display: grid; }
+.flex { display: flex; }
+.inline-flex { display: inline-flex; }
+.flex-col { flex-direction: column; }
+.flex-row { flex-direction: row; }
+.flex-wrap { flex-wrap: wrap; }
+.items-start { align-items: flex-start; }
+.items-center { align-items: center; }
+.items-end { align-items: flex-end; }
+
+.justify-center { justify-content: center; }
+.justify-between { justify-content: space-between; }
+.justify-end { justify-content: flex-end; }
+.col-span-2 { grid-column: span 2 / span 2; }
+
+.space-y-2 > * + * { margin-top: 8px; }
+.space-y-4 > * + * { margin-top: 16px; }
+.space-y-6 > * + * { margin-top: 24px; }
+
+.gap-1 { gap: 4px; }
+.gap-2 { gap: 8px; }
+.gap-3 { gap: 12px; }
+.gap-4 { gap: 16px; }
+
+/* =====================
+   SPACING / SIZING
+   ===================== */
+.w-full { width: 100%; }
+.w-auto { width: auto; }
+
+.h-full { height: 100%; }
+.min-h-\[260px\] { min-height: 260px; }
+.min-h-\[280px\] { min-height: 280px; }
+.min-w-\[120px\] { min-width: 120px; }
+.min-w-\[420px\] { min-width: 420px; }
+.min-w-\[700px\] { min-width: 700px; }
+.mx-auto { margin-left: auto; margin-right: auto; }
+.ml-auto { margin-left: auto; }
+.mt-1 { margin-top: 4px; }
+.mt-2 { margin-top: 8px; }
+.mt-3 { margin-top: 12px; }
+.mt-4 { margin-top: 16px; }
+.mt-6 { margin-top: 24px; }
+.mt-8 { margin-top: 32px; }
+.mb-2 { margin-bottom: 8px; }
+.mb-3 { margin-bottom: 12px; }
+.mb-4 { margin-bottom: 16px; }
+.mb-6 { margin-bottom: 24px; }
+.mt-auto { margin-top: auto; }
+.mb-8 { margin-bottom: 32px; }
+.pt-3 { padding-top: 12px; }
+.pt-4 { padding-top: 16px; }
+
+.p-2 { padding: 8px; }
+.p-3 { padding: 12px; }
+.p-4 { padding: 16px; }
+.p-5 { padding: 20px; }
+.p-6 { padding: 24px; }
+.px-2 { padding-left: 8px; padding-right: 8px; }
+.px-3 { padding-left: 12px; padding-right: 12px; }
+.px-4 { padding-left: 16px; padding-right: 16px; }
+.px-6 { padding-left: 24px; padding-right: 24px; }
+.py-1 { padding-top: 4px; padding-bottom: 4px; }
+.py-1\.5 { padding-top: 6px; padding-bottom: 6px; }
+.py-2 { padding-top: 8px; padding-bottom: 8px; }
+.py-2\.5 { padding-top: 10px; padding-bottom: 10px; }
+.py-3 { padding-top: 12px; padding-bottom: 12px; }
+.py-4 { padding-top: 16px; padding-bottom: 16px; }
+.py-6 { padding-top: 24px; padding-bottom: 24px; }
+
+/* =====================
+   BORDERS / RADIUS
+   ===================== */
+.border-t { border-top: var(--border); }
+.rounded-full { border-radius: var(--radius-pill); }
+.rounded-xl { border-radius: 12px; }
+.rounded-2xl { border-radius: 16px; }
+
+.rounded-\[20px\] { border-radius: 20px; }
+.rounded-\[24px\] { border-radius: 24px; }
+.rounded-\[8px\] { border-radius: 8px; }
+
+/* =====================
+   TIPOGRAFÍA / VISUAL
+   ===================== */
+.text-center { text-align: center; }
+.text-left { text-align: left; }
+.text-right { text-align: right; }
+.text-xs { font-size: 11px; }
+.text-sm { font-size: 13px; }
+.text-base { font-size: 14px; }
+.text-lg { font-size: 16px; }
+.text-\[11px\] { font-size: 11px; }
+.text-\[12px\] { font-size: 12px; }
+.text-\[14px\] { font-size: 14px; }
+.text-\[28px\] { font-size: 28px; }
+.font-bold { font-weight: 700; }
+.font-extrabold { font-weight: 800; }
+.font-medium { font-weight: 500; }
+.font-semibold { font-weight: 600; }
+.tracking-tight { letter-spacing: -0.02em; }
+.tracking-wide { letter-spacing: 0.05em; }
+.tracking-widest { letter-spacing: 0.1em; }
+.leading-tight { line-height: 1.25; }
+.leading-none { line-height: 1; }
+.uppercase { text-transform: uppercase; }
+.hidden { display: none; }
+.block { display: block; }
+.inline-block { display: inline-block; }
+.sticky { position: sticky; }
+.fixed { position: fixed; }
+.top-0 { top: 0; }
+.top-\[4px\] { top: 4px; }
+
+.z-10 { z-index: 10; }
+.z-40 { z-index: 40; }
+.z-50 { z-index: 50; }
+.z-\[100\] { z-index: 100; }
+.cursor-pointer { cursor: pointer; }
+.transition { transition: all 150ms ease; }
+
+.hover\:text-\[var\(--blue\)\]:hover { color: var(--blue); }
+.hover\:bg-\[var\(--gray\)\]:hover { background: var(--gray); }
+.hover\:bg-\[var\(--hover\)\]:hover { background: var(--hover); }
+
+.bg-transparent { background: transparent; }
+.bg-white { background: var(--white); }
+.bg-\[var\(--light\)\] { background: var(--light); }
+.bg-\[var\(--gray\)\] { background: var(--gray); }
+.text-\[var\(--deep\)\] { color: var(--deep); }
+.text-\[var\(--blue\)\] { color: var(--blue); }
+.text-\[var\(--green\)\] { color: var(--green); }
+.text-\[var\(--white\)\] { color: var(--white); }
+.font-\[Inter\] { font-family: var(--font-body); }
+.font-\[Inter_Tight\] { font-family: var(--font-title); }
+
+/* =====================
+   RESPONSIVE
+   ===================== */
+@media (max-width: 900px) {
+  .grid-calendario { grid-template-columns: repeat(2, 1fr); }
+  .h1 { font-size: 28px; }
+}
+@media (max-width: 600px) {
+  .grid-calendario { grid-template-columns: 1fr; }
+}
+@media (max-width: 430px) {
+
+}
+@media (max-width: 380px) {
+
+}
+
+/* =====================
+   WARMUP / CALENTAMIENTO
+   ===================== */
+
+.h-\[14px\] { height: 14px; }
+.w-\[18px\] { width: 18px; }
+.text-\[9px\] { font-size: 9px; }

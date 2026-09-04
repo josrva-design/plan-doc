@@ -1,0 +1,241 @@
+.page {
+ width: 1080px;
+ min-height: 1920px;
+ aspect-ratio: 9/16;
+ background: white;
+ margin: 20px auto;
+ padding: 48px;
+ box-sizing: border-box;
+ page-break-after: always;
+ position: relative;
+ overflow: hidden;
+}
+
+.pdf-page {
+ width: 100%;
+ max-width: 1080px;
+ background: white;
+ position: relative;
+ overflow: visible;
+ box-sizing: border-box;
+ padding: 48px;
+ flex-shrink: 0;
+}
+
+  .h1 {
+    font-family: var(--font-display);
+    font-size: clamp(2.2rem, 5vw, 42px);
+    font-weight: 800;
+    color: var(--color-text-primary);
+    line-height: 1.05;
+    letter-spacing: -0.02em;
+  }
+
+  .sub {
+    font-size: 12px;
+    color: var(--color-muted);
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    margin-top: 8px;
+  }
+
+  .typo-section {
+    font-size: 12px;
+    font-weight: 800;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    color: var(--color-text-primary);
+    margin-bottom: 16px;
+  }
+
+  .typo-label {
+    font-size: 9px;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--color-navy);
+  }
+
+  .typo-label-sm {
+    font-size: 9px;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--color-navy);
+  }
+
+  .typo-value-md {
+    font-size: 12px;
+    font-weight: 800;
+    color: var(--color-text-primary);
+  }
+
+  .typo-value-lg {
+    font-size: 14px;
+    font-weight: 800;
+    color: var(--color-text-primary);
+  }
+
+  .typo-value-xl {
+    font-size: 18px;
+    font-weight: 800;
+    color: var(--color-text-primary);
+  }
+
+  .typo-muted-sm {
+    font-size: 10px;
+    color: var(--color-muted);
+  }
+
+  .typo-muted-xs {
+    font-size: 9px;
+    color: var(--color-text-muted);
+  }
+
+  /* Escala A — por defecto color hereda del contexto, no define color propio */
+  .cp-hero {
+    font-size: var(--cp-text-hero);
+    font-weight: 800;
+    letter-spacing: -0.03em;
+    line-height: 0.95;
+  }
+
+  .cp-subtitle {
+    font-size: var(--cp-text-subtitle);
+    line-height: 1.5;
+  }
+
+  .cp-section {
+    font-size: var(--cp-text-section);
+    font-weight: 800;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    opacity: 0.6;
+  }
+
+  .cp-data {
+    font-size: var(--cp-text-data);
+    font-weight: 800;
+    line-height: 1;
+    letter-spacing: -0.02em;
+  }
+
+  .cp-body {
+    font-size: var(--cp-text-body);
+    line-height: 1.5;
+  }
+
+  .cp-secondary {
+    font-size: var(--cp-text-secondary);
+    line-height: 1.4;
+  }
+
+  .cp-caption {
+    font-size: var(--cp-text-caption);
+    line-height: 1.4;
+  }
+
+  /* Contexto oscuro: texto blanco dentro de pills/fondos oscuros */
+  .on-dark {
+    color: white;
+  }
+
+  .on-dark .cp-body {
+    color: rgba(255, 255, 255, 0.92);
+  }
+
+  .on-dark .cp-secondary {
+    color: rgba(255, 255, 255, 0.8);
+  }
+
+  .on-dark .cp-caption {
+    color: rgba(255, 255, 255, 0.7);
+  }
+
+  .typo-trend {
+    font-size: 10px;
+    font-weight: 700;
+    color: var(--color-green);
+  }
+
+  .typo-trend-icon {
+    font-size: 14px;
+    font-weight: 700;
+    color: var(--color-green);
+  }
+
+  .typo-card-label {
+    font-size: 9px;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--color-navy);
+  }
+
+  .typo-card-label-white {
+    font-size: 9px;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--white);
+    opacity: 0.85;
+  }
+
+  .typo-subtitle {
+    font-size: 11px;
+    color: var(--color-muted);
+    margin-top: 8px;
+    line-height: 1.5;
+  }
+
+  .typo-input {
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--color-text-primary);
+  }
+
+  .typo-input-sm {
+    font-size: 10px;
+    font-weight: 500;
+    color: var(--color-text-primary);
+  }
+
+  .typo-input-note {
+    font-size: 11px;
+    color: var(--color-text-muted);
+    margin-top: 4px;
+  }
+
+  .typo-btn {
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.05em;
+  }
+
+  .typo-badge-select {
+    font-size: 10px;
+    font-weight: 700;
+    text-align: center;
+    color: var(--color-green);
+  }
+
+  .typo-table-head {
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.8px;
+    text-transform: uppercase;
+    color: var(--color-navy);
+    background: var(--color-bg-subtle);
+  }
+
+  .text-muted {
+    color: var(--color-muted);
+  }
+
+  .text-navy {
+    color: var(--color-text-primary);
+  }
+
+  .text-green {
+    color: var(--color-green);
+  }
